@@ -40,9 +40,9 @@ var ENV = {
   // 检查更新的分支
   UPDATE_BRANCH: "master",
   // 当前版本
-  BUILD_TIMESTAMP: 1678945730,
+  BUILD_TIMESTAMP: 1680922168,
   // 当前版本 commit id
-  BUILD_VERSION: "9e23846",
+  BUILD_VERSION: "8e30974",
   // DEBUG 专用
   // 调试模式
   DEBUG_MODE: false,
@@ -418,6 +418,20 @@ async function requestImageFromOpenAI(prompt) {
   }
   return resp.data[0].url;
 }
+async function requestBalanceFromOpenAI() {
+  const resp = await fetch(`${ENV.OPENAI_API_DOMAIN}/dashboard/billing/credit_grants`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${ENV.API_KEY}`
+    }
+  }).then((res) => res.json());
+  if (resp.error?.message) {
+    throw new Error(`OpenAI API \u9519\u8BEF
+> ${resp.error.message}`);
+  }
+  return resp;
+}
 async function updateBotUsage(usage) {
   if (!ENV.ENABLE_USAGE_STATISTICS) {
     return;
@@ -784,8 +798,26 @@ var commandHandlers = {
     scopes: ["all_private_chats"],
     fn: commandUpdateRole,
     needAuth: commandAuthCheck.shareModeGroup
+  },
+  "/balance": {
+    help: "\u67E5\u8BE2\u8D26\u6237\u4F59\u989D",
+    scopes: ["all_private_chats"],
+    fn: commandBalance,
+    needAuth: commandAuthCheck.shareModeGroup
   }
 };
+async function commandBalance(message, command, subcommand) {
+  try {
+    const resp = await requestBalanceFromOpenAI();
+    let text = "\u{1F4B2}\u8D26\u6237\u4F59\u989D\n";
+    text += "\u8D26\u6237\u603B\u989D\uFF1A" + resp.total_granted + "\n";
+    text += "\u5DF2\u4F7F\u7528\uFF1A" + resp.total_used + "\n";
+    text += "\u53EF\u7528\uFF1A" + resp.total_available + "\n";
+    return sendMessageToTelegram(text);
+  } catch (e) {
+    return sendMessageToTelegram(`ERROR:balance: ${e.message}`);
+  }
+}
 async function commandUpdateRole(message, command, subcommand) {
   if (subcommand === "show") {
     const size = Object.getOwnPropertyNames(USER_DEFINE.ROLE).length;

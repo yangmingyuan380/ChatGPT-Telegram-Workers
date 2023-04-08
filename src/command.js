@@ -1,7 +1,7 @@
 import {sendMessageToTelegram, sendPhotoToTelegram, sendChatActionToTelegram, getChatRole} from './telegram.js';
 import {DATABASE, ENV, CONST} from './env.js';
 import {SHARE_CONTEXT, USER_CONFIG, CURRENT_CHAT_CONTEXT, USER_DEFINE} from './context.js';
-import {requestImageFromOpenAI} from './openai.js';
+import {requestImageFromOpenAI, requestBalanceFromOpenAI} from './openai.js';
 import {mergeConfig} from './utils.js';
 
 const commandAuthCheck = {
@@ -78,35 +78,54 @@ const commandHandlers = {
     fn: commandUpdateRole,
     needAuth: commandAuthCheck.shareModeGroup,
   },
+  '/balance': {
+    help: '查询账户余额',
+    scopes: ['all_private_chats'],
+    fn: commandBalance,
+    needAuth: commandAuthCheck.shareModeGroup,
+  },
 };
+
+async function commandBalance(message, command, subcommand) {
+  try {
+    const resp = await requestBalanceFromOpenAI();
+    let text = '💲账户余额\n';
+    text += '账户总额：' + resp.total_granted + '\n';
+    text += '已使用：' + resp.total_used + '\n';
+    text += '可用：' + resp.total_available + '\n';
+    return sendMessageToTelegram(text);
+  } catch (e) {
+    return sendMessageToTelegram(`ERROR:balance: ${e.message}`);
+  }
+}
 
 async function commandUpdateRole(message, command, subcommand) {
   // 显示
-  if (subcommand==='show') {
+  if (subcommand === 'show') {
     const size = Object.getOwnPropertyNames(USER_DEFINE.ROLE).length;
-    if (size===0) {
+    if (size === 0) {
       return sendMessageToTelegram('还未定义任何角色');
     }
     let showMsg = `当前已定义的角色如下(${size}):\n`;
     for (const role in USER_DEFINE.ROLE) {
       if (USER_DEFINE.ROLE.hasOwnProperty(role)) {
-        showMsg+=`~${role}:\n<pre>`;
-        showMsg+=JSON.stringify(USER_DEFINE.ROLE[role])+'\n';
-        showMsg+='</pre>';
+        showMsg += `~${role}:\n<pre>`;
+        showMsg += JSON.stringify(USER_DEFINE.ROLE[role]) + '\n';
+        showMsg += '</pre>';
       }
     }
     CURRENT_CHAT_CONTEXT.parse_mode = 'HTML';
     return sendMessageToTelegram(showMsg);
   }
 
-  const helpMsg = '格式错误: 命令完整格式为 `/role 操作`\n'+
-      '当前支持以下`操作`:\n'+
-      '`/role show` 显示当前定义的角色.\n'+
-      '`/role 角色名 del` 删除指定名称的角色.\n'+
-      '`/role 角色名 KEY=VALUE` 设置指定角色的配置.\n'+
-      ' 目前以下设置项:\n'+
-      '  `SYSTEM_INIT_MESSAGE`:初始化消息\n'+
-      '  `OPENAI_API_EXTRA_PARAMS`:OpenAI API 额外参数，必须为JSON';
+  const helpMsg = '格式错误: 命令完整格式为 `/role 操作`\n' +
+        '当前支持以下`操作`:\n' +
+        '`/role show` 显示当前定义的角色.\n' +
+        '`/role 角色名 del` 删除指定名称的角色.\n' +
+        '`/role 角色名 KEY=VALUE` 设置指定角色的配置.\n' +
+        ' 目前以下设置项:\n' +
+        '  `SYSTEM_INIT_MESSAGE`:初始化消息\n' +
+        '  `OPENAI_API_EXTRA_PARAMS`:OpenAI API 额外参数，必须为JSON';
 
   const kv = subcommand.indexOf(' ');
   if (kv === -1) {
@@ -157,12 +176,12 @@ async function commandUpdateRole(message, command, subcommand) {
 }
 
 async function commandGenerateImg(message, command, subcommand) {
-  if (subcommand==='') {
+  if (subcommand === '') {
     return sendMessageToTelegram('请输入图片描述。命令完整格式为 \`/img 狸花猫\`');
   }
   try {
     setTimeout(() => sendChatActionToTelegram('upload_photo').catch(console.error), 0);
-    const imgUrl =await requestImageFromOpenAI(subcommand);
+    const imgUrl = await requestImageFromOpenAI(subcommand);
     try {
       return sendPhotoToTelegram(imgUrl);
     } catch (e) {
@@ -176,10 +195,10 @@ async function commandGenerateImg(message, command, subcommand) {
 // 命令帮助
 async function commandGetHelp(message, command, subcommand) {
   const helpMsg =
-      '当前支持以下命令:\n' +
-      Object.keys(commandHandlers)
-          .map((key) => `${key}：${commandHandlers[key].help}`)
-          .join('\n');
+        '当前支持以下命令:\n' +
+        Object.keys(commandHandlers)
+            .map((key) => `${key}：${commandHandlers[key].help}`)
+            .join('\n');
   return sendMessageToTelegram(helpMsg);
 }
 
@@ -190,7 +209,7 @@ async function commandCreateNewChatContext(message, command, subcommand) {
     if (command === '/new') {
       return sendMessageToTelegram('新的对话已经开始');
     } else {
-      if (SHARE_CONTEXT.chatType==='private') {
+      if (SHARE_CONTEXT.chatType === 'private') {
         return sendMessageToTelegram(
             `新的对话已经开始，你的ID(${CURRENT_CHAT_CONTEXT.chat_id})`,
         );
@@ -288,17 +307,17 @@ async function commandUsage() {
 
 async function commandSystem(message) {
   let msg = '当前系统信息如下:\n';
-  msg+='OpenAI模型:'+ENV.CHAT_MODEL+'\n';
+  msg += 'OpenAI模型:' + ENV.CHAT_MODEL + '\n';
   if (ENV.DEBUG_MODE) {
-    msg+='<pre>';
-    msg+=`USER_CONFIG: \n${JSON.stringify(USER_CONFIG, null, 2)}\n`;
+    msg += '<pre>';
+    msg += `USER_CONFIG: \n${JSON.stringify(USER_CONFIG, null, 2)}\n`;
     if (ENV.DEV_MODE) {
       const shareCtx = {...SHARE_CONTEXT};
       shareCtx.currentBotToken = 'ENPYPTED';
-      msg +=`CHAT_CONTEXT: \n${JSON.stringify(CURRENT_CHAT_CONTEXT, null, 2)}\n`;
+      msg += `CHAT_CONTEXT: \n${JSON.stringify(CURRENT_CHAT_CONTEXT, null, 2)}\n`;
       msg += `SHARE_CONTEXT: \n${JSON.stringify(shareCtx, null, 2)}\n`;
     }
-    msg+='</pre>';
+    msg += '</pre>';
   }
   CURRENT_CHAT_CONTEXT.parse_mode = 'HTML';
   return sendMessageToTelegram(msg);
@@ -374,7 +393,7 @@ export async function bindCommandForTelegram(token) {
   }
 
   const result = {};
-  for (const scope in scopeCommandMap) { // eslint-disable-line
+    for (const scope in scopeCommandMap) { // eslint-disable-line
     result[scope] = await fetch(
         `https://api.telegram.org/bot${token}/setMyCommands`,
         {

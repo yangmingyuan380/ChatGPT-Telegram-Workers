@@ -44,6 +44,21 @@ export async function requestImageFromOpenAI(prompt) {
   return resp.data[0].url;
 }
 
+// 查询当前账户余额
+export async function requestBalanceFromOpenAI() {
+  const resp = await fetch(`${ENV.OPENAI_API_DOMAIN}/dashboard/billing/credit_grants`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${ENV.API_KEY}`,
+    },
+  }).then((res) => res.json());
+  if (resp.error?.message) {
+    throw new Error(`OpenAI API 错误\n> ${resp.error.message}`);
+  }
+  return resp;
+}
+
 // 更新当前机器人的用量统计
 async function updateBotUsage(usage) {
   if (!ENV.ENABLE_USAGE_STATISTICS) {
