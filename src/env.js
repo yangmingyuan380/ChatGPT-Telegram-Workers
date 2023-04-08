@@ -68,6 +68,10 @@ export const CONST = {
 
 export let DATABASE = null;
 
+/**
+ * 根据env环境变量初始化参数
+ * @param {Object} env - 环境变量
+ */
 export function initEnv(env) {
   DATABASE = env.DATABASE;
   for (const key in ENV) {
